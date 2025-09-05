@@ -1,0 +1,93 @@
+version: "3.8"
+
+services:
+  claims-api:
+    build: .
+    container_name: claims-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./artifacts:/app/artifacts
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MODEL_REGISTRY_NAME=claims_denial_model
+      - DATA_DIR=/app/data
+      - LOG_LEVEL=info
+    depends_on:
+      - mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.1
+    container_name: mlflow-tracking
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+      - ./artifacts:/mlflow/artifacts
+    environment:
+      - MLFLOW_TRACKING_URI=sqlite:///mlflow/mlruns/mlflow.db
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow/mlruns/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    restart: unless-stopped
+
+  airflow-webserver:
+    image: apache/airflow:2.9.1-python3.11
+    container_name: airflow-webserver
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./models:/opt/airflow/models
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-claims-platform-secret}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CLAIMS_API_URL=http://claims-api:8000
+      - PYTHONPATH=/opt/airflow
+    command: >
+      bash -c "airflow db init &&
+      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true &&
+      airflow webserver --port 8080"
+    depends_on:
+      - mlflow
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.1-python3.11
+    container_name: airflow-scheduler
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./models:/opt/airflow/models
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CLAIMS_API_URL=http://claims-api:8000
+      - PYTHONPATH=/opt/airflow
+    command: airflow scheduler
+    depends_on:
+      - airflow-webserver
+    restart: unless-stopped
+
+volumes:
+  mlruns:
+  artifacts:
