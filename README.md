@@ -4,7 +4,7 @@ End-to-end ML pipeline for predicting healthcare claim denials and forecasting c
 
 ## Why I Built This
 
-At Lantern Care I process 500K+ healthcare claims monthly through our PBM adjudication pipeline. The biggest pain point I kept running into was claim denials — they cost us time, money, and create friction with providers. About 25% of claims get denied on first submission, and most of those denials are predictable if you look at the right signals.
+ I processed 500K+ healthcare claims monthly through our PBM adjudication pipeline. The biggest pain point I kept running into was claim denials — they cost us time, money, and create friction with providers. About 25% of claims get denied on first submission, and most of those denials are predictable if you look at the right signals.
 
 I built this platform to catch likely denials *before* submission. The system ingests raw claims data (CPT codes, ICD-10 diagnoses, NDC drug codes, provider info), engineers features that capture the patterns I've seen in real adjudication — things like submission lag, chronic condition flags, provider historical denial rates — and runs them through an XGBoost model that hits 87% AUC on our test set. That accuracy maps to real savings: on $50M+ annual claims volume, even a 5% reduction in preventable denials is meaningful.
 
